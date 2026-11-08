@@ -62,4 +62,28 @@ final class PaginationViewTests: XCTestCase {
         XCTAssertEqual(delegate.updates.count, 2, "The views weren't reported again once every neighbour loaded")
         XCTAssertEqual(delegate.updates.last, [0, 1, 2])
     }
+
+    /// Opened with no pre-loading, only the current page loads; raising the counts later loads the
+    /// neighbours, and lowering them again releases them.
+    func testPreloadCountsCanChangeAfterTheOpen() async throws {
+        let delegate = Delegate()
+        let view = PaginationView(frame: CGRect(x: 0, y: 0, width: 300, height: 400), preloadPreviousPositionCount: 0, preloadNextPositionCount: 0, isScrollEnabled: true)
+        view.delegate = delegate
+
+        view.reloadAtIndex(1, location: .start, pageCount: 3, readingProgression: .ltr)
+        for _ in 0 ..< 200 where delegate.updates.count < 2 {
+            await Task.yield()
+        }
+        XCTAssertEqual(Set(view.loadedViews.keys), [1])
+
+        view.setPreloadPositionCounts(previous: 1, next: 1)
+        for _ in 0 ..< 200 where view.loadedViews.count < 3 {
+            await Task.yield()
+        }
+        XCTAssertEqual(Set(view.loadedViews.keys), [0, 1, 2])
+        XCTAssertEqual(view.currentIndex, 1, "Pre-loading moved the current page")
+
+        view.setPreloadPositionCounts(previous: 0, next: 0)
+        XCTAssertEqual(Set(view.loadedViews.keys), [1])
+    }
 }

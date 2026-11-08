@@ -62,8 +62,8 @@ final class PaginationView: UIView, Loggable {
 
     /// Number of positions (as in `Publication.positionList`) to preload before and after the
     /// current page.
-    private let preloadPreviousPositionCount: Int
-    private let preloadNextPositionCount: Int
+    private var preloadPreviousPositionCount: Int
+    private var preloadNextPositionCount: Int
 
     /// Queue of page index to be loaded next.
     private var loadingIndexQueue: [(index: Int, location: PageLocation)] = []
@@ -226,6 +226,28 @@ final class PaginationView: UIView, Loggable {
         // To make sure that the views the most likely to be visible are loaded first, we first load
         // the current one, then the next ones and to finish the previous ones.
         scheduleLoadPage(at: index, location: location)
+        scheduleNeighbours(of: index)
+
+        loadPages()
+    }
+
+    /// Changes how many positions are pre-loaded around the current page, and loads or flushes the
+    /// neighbouring views to match. For example, an app can open with no pre-loading, so the first
+    /// page shows as soon as it can, then pre-load the neighbours once it has.
+    func setPreloadPositionCounts(previous: Int, next: Int) {
+        preloadPreviousPositionCount = previous
+        preloadNextPositionCount = next
+        guard !isEmpty else {
+            return
+        }
+        scheduleNeighbours(of: currentIndex)
+        if !isLoadingPages {
+            loadPages()
+        }
+    }
+
+    /// Queues the views around `index` to be pre-loaded, and flushes the ones out of range.
+    private func scheduleNeighbours(of index: Int) {
         let lastIndex = scheduleLoadPages(from: index, upToPositionCount: preloadNextPositionCount, direction: .forward, location: .start)
         let firstIndex = scheduleLoadPages(from: index, upToPositionCount: preloadPreviousPositionCount, direction: .backward, location: .end)
 
@@ -237,18 +259,25 @@ final class PaginationView: UIView, Loggable {
                 continue
             }
         }
-
-        loadPages()
     }
 
     private func loadPages() {
+        loadingGeneration += 1
+        let generation = loadingGeneration
+        isLoadingPages = true
         loadPagesTask.replace { @MainActor in
             await loadNextPage()
+            if generation == loadingGeneration {
+                isLoadingPages = false
+            }
             delegate?.paginationViewDidUpdateViews(self)
         }
     }
 
     private var loadPagesTask: Task<Void, Never>?
+    /// Whether the newest `loadPages()` is still working through the queue.
+    private var isLoadingPages = false
+    private var loadingGeneration = 0
 
     private func loadNextPage() async {
         guard let (index, location) = loadingIndexQueue.popFirst() else {

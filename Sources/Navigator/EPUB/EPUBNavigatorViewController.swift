@@ -725,6 +725,17 @@ open class EPUBNavigatorViewController: InputObservableViewController,
         }
     }
 
+    /// Changes how many positions are pre-loaded before and after the current resource, in place of
+    /// `Configuration.preloadPreviousPositionCount` and `preloadNextPositionCount`. Neighbours newly
+    /// in range start loading after the current resource; those out of range are released.
+    public func setPreloadPositionCounts(previous: Int, next: Int) {
+        let hasPositions = !positionsByReadingOrder.isEmpty
+        paginationView?.setPreloadPositionCounts(
+            previous: hasPositions ? previous : 0,
+            next: hasPositions ? next : 0
+        )
+    }
+
     public func go(to locator: Locator, options: NavigatorGoOptions) async -> Bool {
         let locator = publication.normalizeLocator(locator)
 
