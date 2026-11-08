@@ -14,7 +14,7 @@ import WebKit
 /// cycle (view → web view → configuration → user content controller → view),
 /// which kept every spread view, its web view and its web content process
 /// alive when the view hierarchy above the `PaginationView` was removed.
-final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+@MainActor final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
     private weak var target: WKScriptMessageHandler?
 
     init(_ target: WKScriptMessageHandler) {

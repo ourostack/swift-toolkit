@@ -112,6 +112,7 @@ class EPUBSpreadView: UIView, Loggable, PageView {
     /// Called when the spread view is removed from the view hierarchy, to
     /// clear pending operations and retain cycles.
     func clear() {
+        isCleared = true
         webView.stopLoading()
 
         spreadLoadTask?.cancel()
@@ -119,7 +120,18 @@ class EPUBSpreadView: UIView, Loggable, PageView {
 
         // Disable JS messages to break WKUserContentController reference.
         disableJSMessages()
+
+        // The spread will never finish loading now. Resume anyone waiting for
+        // it: a waiter's task holds this view, so it would otherwise keep the
+        // view and its web view alive forever.
+        onSpreadLoadedCallbacks.complete()
     }
+
+    /// Set by `clear()`: the view is being discarded and will not load.
+    private var isCleared = false
+
+    /// The view was cleared before or while a script waited for its spread.
+    struct ClearedError: Error {}
 
     func setupWebView() {
         scrollView.alpha = 0
@@ -174,6 +186,9 @@ class EPUBSpreadView: UIView, Loggable, PageView {
     @discardableResult
     func evaluateScript(_ script: String, inHREF href: AnyURL? = nil) async -> Result<Any, Error> {
         await spreadLoaded()
+        guard !isCleared else {
+            return .failure(ClearedError())
+        }
 
         log(.trace, "Evaluate script: \(script)")
         return await withCheckedContinuation { continuation in
@@ -414,7 +429,7 @@ class EPUBSpreadView: UIView, Loggable, PageView {
 
     /// Awaits for the spread to be fully loaded.
     func spreadLoaded() async {
-        if isSpreadLoaded {
+        if isSpreadLoaded || isCleared {
             return
         }
 
