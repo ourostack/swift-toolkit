@@ -535,7 +535,7 @@ class EPUBSpreadView: UIView, Loggable, PageView {
 
         JSMessages[name] = handler
         if JSMessagesEnabled {
-            webView.configuration.userContentController.add(self, name: name)
+            webView.configuration.userContentController.add(WeakScriptMessageHandler(self), name: name)
         }
     }
 
@@ -559,7 +559,7 @@ class EPUBSpreadView: UIView, Loggable, PageView {
         }
         JSMessagesEnabled = true
         for name in JSMessages.keys {
-            webView.configuration.userContentController.add(self, name: name)
+            webView.configuration.userContentController.add(WeakScriptMessageHandler(self), name: name)
         }
     }
 
