@@ -86,4 +86,57 @@ final class PaginationViewTests: XCTestCase {
         view.setPreloadPositionCounts(previous: 0, next: 0)
         XCTAssertEqual(Set(view.loadedViews.keys), [1])
     }
+
+    /// Lowering the counts while a neighbour is still loading drops the queued ones too, so no view
+    /// loads outside the new range.
+    func testLoweringTheCountsDropsTheQueuedNeighbours() async throws {
+        let delegate = Delegate()
+        delegate.held = [2]
+        let view = PaginationView(frame: CGRect(x: 0, y: 0, width: 300, height: 400), preloadPreviousPositionCount: 0, preloadNextPositionCount: 3, isScrollEnabled: true)
+        view.delegate = delegate
+
+        view.reloadAtIndex(1, location: .start, pageCount: 8, readingProgression: .ltr)
+        for _ in 0 ..< 200 where delegate.pages[2]?.release == nil {
+            await Task.yield()
+        }
+
+        view.setPreloadPositionCounts(previous: 0, next: 0)
+        delegate.pages[2]?.release?.resume()
+        for _ in 0 ..< 200 {
+            await Task.yield()
+        }
+        XCTAssertNil(delegate.pages[3], "A neighbour queued before the counts were lowered still loaded")
+        XCTAssertNil(delegate.pages[4], "A neighbour queued before the counts were lowered still loaded")
+        XCTAssertEqual(Set(view.loadedViews.keys), [1])
+    }
+
+    /// A jump loads its target before the neighbours still queued around the page it left.
+    func testAJumpLoadsItsTargetBeforeTheOldNeighbours() async throws {
+        let delegate = Delegate()
+        delegate.held = [2]
+        let view = PaginationView(frame: CGRect(x: 0, y: 0, width: 300, height: 400), preloadPreviousPositionCount: 0, preloadNextPositionCount: 3, isScrollEnabled: true)
+        view.delegate = delegate
+
+        view.reloadAtIndex(1, location: .start, pageCount: 10, readingProgression: .ltr)
+        for _ in 0 ..< 200 where delegate.pages[2]?.release == nil {
+            await Task.yield()
+        }
+
+        let jump = Task { await view.goToIndex(7, location: .start, options: NavigatorGoOptions(animated: false)) }
+        for _ in 0 ..< 200 where delegate.pages[7] == nil {
+            await Task.yield()
+        }
+        XCTAssertNotNil(delegate.pages[7], "The jump target didn't load while an old neighbour was still loading")
+        XCTAssertNil(delegate.pages[3], "An old neighbour loaded before or instead of the jump target")
+        XCTAssertNil(delegate.pages[4], "An old neighbour loaded before or instead of the jump target")
+
+        delegate.pages[2]?.release?.resume()
+        _ = await jump.value
+        for _ in 0 ..< 200 {
+            await Task.yield()
+        }
+        XCTAssertEqual(view.currentIndex, 7)
+        XCTAssertEqual(Set(view.loadedViews.keys), [7, 8, 9])
+        XCTAssertNil(delegate.pages[3])
+    }
 }

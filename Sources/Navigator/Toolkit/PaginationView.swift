@@ -225,7 +225,7 @@ final class PaginationView: UIView, Loggable {
 
         // To make sure that the views the most likely to be visible are loaded first, we first load
         // the current one, then the next ones and to finish the previous ones.
-        scheduleLoadPage(at: index, location: location)
+        scheduleLoadPage(at: index, location: location, first: true)
         scheduleNeighbours(of: index)
 
         loadPages()
@@ -235,21 +235,27 @@ final class PaginationView: UIView, Loggable {
     /// neighbouring views to match. For example, an app can open with no pre-loading, so the first
     /// page shows as soon as it can, then pre-load the neighbours once it has.
     func setPreloadPositionCounts(previous: Int, next: Int) {
+        guard previous != preloadPreviousPositionCount || next != preloadNextPositionCount else {
+            return
+        }
         preloadPreviousPositionCount = previous
         preloadNextPositionCount = next
         guard !isEmpty else {
             return
         }
         scheduleNeighbours(of: currentIndex)
-        if !isLoadingPages {
+        if !isLoadingPages, !loadingIndexQueue.isEmpty {
             loadPages()
         }
     }
 
-    /// Queues the views around `index` to be pre-loaded, and flushes the ones out of range.
+    /// Queues the views around `index` to be pre-loaded, and flushes the ones out of range, loaded
+    /// or still queued.
     private func scheduleNeighbours(of index: Int) {
         let lastIndex = scheduleLoadPages(from: index, upToPositionCount: preloadNextPositionCount, direction: .forward, location: .start)
         let firstIndex = scheduleLoadPages(from: index, upToPositionCount: preloadPreviousPositionCount, direction: .backward, location: .end)
+
+        loadingIndexQueue.removeAll { !(firstIndex ... lastIndex ~= $0.index) }
 
         for (i, view) in loadedViews {
             // Flushes the views that are not needed anymore.
@@ -280,7 +286,8 @@ final class PaginationView: UIView, Loggable {
     private var loadingGeneration = 0
 
     private func loadNextPage() async {
-        guard let (index, location) = loadingIndexQueue.popFirst() else {
+        // A newer `loadPages()` owns the queue once this one is cancelled.
+        guard !Task.isCancelled, let (index, location) = loadingIndexQueue.popFirst() else {
             return
         }
 
@@ -334,14 +341,20 @@ final class PaginationView: UIView, Loggable {
     /// Queue a page to be loaded at the given index, if it's not already loaded.
     ///
     /// - Returns: Whether page is or will be loaded.
+    ///
+    /// - Parameter first: Whether to load it before the other queued pages, as for the current one.
     @discardableResult
-    private func scheduleLoadPage(at index: Int, location: PageLocation) -> Bool {
+    private func scheduleLoadPage(at index: Int, location: PageLocation, first: Bool = false) -> Bool {
         guard 0 ..< pageCount ~= index else {
             return false
         }
 
         loadingIndexQueue.removeAll { $0.index == index }
-        loadingIndexQueue.append((index: index, location: location))
+        if first {
+            loadingIndexQueue.insert((index: index, location: location), at: 0)
+        } else {
+            loadingIndexQueue.append((index: index, location: location))
+        }
         return true
     }
 

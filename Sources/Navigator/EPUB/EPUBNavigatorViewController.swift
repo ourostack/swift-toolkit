@@ -547,11 +547,17 @@ open class EPUBNavigatorViewController: InputObservableViewController,
 
     private var paginationView: PaginationView?
 
+    /// Set by `setPreloadPositionCounts(previous:next:)`, in place of the configuration's counts.
+    private var preloadCountsOverride: (previous: Int, next: Int)?
+    private var preloadCounts: (previous: Int, next: Int) {
+        preloadCountsOverride ?? (config.preloadPreviousPositionCount, config.preloadNextPositionCount)
+    }
+
     private func makePaginationView(hasPositions: Bool) -> PaginationView {
         let view = PaginationView(
             frame: .zero,
-            preloadPreviousPositionCount: hasPositions ? config.preloadPreviousPositionCount : 0,
-            preloadNextPositionCount: hasPositions ? config.preloadNextPositionCount : 0,
+            preloadPreviousPositionCount: hasPositions ? preloadCounts.previous : 0,
+            preloadNextPositionCount: hasPositions ? preloadCounts.next : 0,
             isScrollEnabled: isPaginationViewScrollingEnabled
         )
         view.delegate = self
@@ -729,6 +735,8 @@ open class EPUBNavigatorViewController: InputObservableViewController,
     /// `Configuration.preloadPreviousPositionCount` and `preloadNextPositionCount`. Neighbours newly
     /// in range start loading after the current resource; those out of range are released.
     public func setPreloadPositionCounts(previous: Int, next: Int) {
+        // Kept for a pagination view made later, as on a reload.
+        preloadCountsOverride = (previous, next)
         let hasPositions = !positionsByReadingOrder.isEmpty
         paginationView?.setPreloadPositionCounts(
             previous: hasPositions ? previous : 0,
