@@ -269,6 +269,11 @@ final class PaginationView: UIView, Loggable {
         }
 
         await view.go(to: location, animated: false)
+        if index == currentIndex, !Task.isCancelled {
+            // Reports the current page as soon as it is ready, instead of once the pre-loaded
+            // neighbours are too, so the navigator's location follows the visible page.
+            delegate?.paginationViewDidUpdateViews(self)
+        }
         await loadNextPage()
     }
 
