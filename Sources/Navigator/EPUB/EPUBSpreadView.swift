@@ -130,9 +130,6 @@ class EPUBSpreadView: UIView, Loggable, PageView {
     /// Set by `clear()`: the view is being discarded and will not load.
     private var isCleared = false
 
-    /// The view was cleared before or while a script waited for its spread.
-    struct ClearedError: Error {}
-
     func setupWebView() {
         scrollView.alpha = 0
 
@@ -186,8 +183,11 @@ class EPUBSpreadView: UIView, Loggable, PageView {
     @discardableResult
     func evaluateScript(_ script: String, inHREF href: AnyURL? = nil) async -> Result<Any, Error> {
         await spreadLoaded()
+        // Cleared while the script waited: this spread will never load. The
+        // same error as when there is no spread to run in, so a caller can run
+        // the script again on the spread that replaced this one.
         guard !isCleared else {
-            return .failure(ClearedError())
+            return .failure(EPUBNavigatorViewController.EPUBError.spreadNotLoaded)
         }
 
         log(.trace, "Evaluate script: \(script)")
