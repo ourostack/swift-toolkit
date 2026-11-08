@@ -419,6 +419,13 @@ open class EPUBNavigatorViewController: InputObservableViewController,
             log(.error, DebugError("Failed to load positions.", cause: error))
         }
 
+        // Discarded while the positions loaded: make no pages, and let anyone
+        // waiting for the navigator go on (it has none to offer).
+        guard !isDiscarded else {
+            onInitializedCallbacks.complete()
+            return
+        }
+
         paginationView = makePaginationView(
             hasPositions: !positionsByReadingOrder.isEmpty
         )
@@ -435,6 +442,19 @@ open class EPUBNavigatorViewController: InputObservableViewController,
     }
 
     private let onInitializedCallbacks = CompletionList()
+
+    private var isDiscarded = false
+
+    /// Stops the navigator for good and releases its pages, their web views
+    /// and their web content processes.
+    ///
+    /// Call it when the navigator is done with, before letting it go. Removing
+    /// the navigator's view alone may not release its pages. The navigator
+    /// shows nothing and loads nothing afterwards.
+    public func discard() {
+        isDiscarded = true
+        paginationView?.removeFromSuperview()
+    }
 
     private func initialized() async {
         await withCheckedContinuation { continuation in

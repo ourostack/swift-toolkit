@@ -161,13 +161,25 @@ final class PaginationView: UIView, Loggable {
         super.willMove(toSuperview: newSuperview)
 
         if newSuperview == nil {
+            // Once detached, make no more pages: a page made now would never
+            // be removed (this is the only place they are), so it and its web
+            // view would stay alive for good.
+            isDetached = true
+            loadPagesTask.cancel()
+            loadingIndexQueue.removeAll()
+
             // Remove all spread views to break retain cycles
             for (_, view) in loadedViews {
                 view.removeFromSuperview()
             }
             loadedViews.removeAll()
+        } else {
+            isDetached = false
         }
     }
+
+    /// Set while the view is out of any superview: it makes no pages then.
+    private(set) var isDetached = false
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
@@ -251,7 +263,7 @@ final class PaginationView: UIView, Loggable {
     private var loadPagesTask: Task<Void, Never>?
 
     private func loadNextPage() async {
-        guard let (index, location) = loadingIndexQueue.popFirst() else {
+        guard !isDetached, let (index, location) = loadingIndexQueue.popFirst() else {
             return
         }
 
