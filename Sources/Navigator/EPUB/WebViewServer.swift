@@ -203,8 +203,8 @@ private let serverLog = Logger(subsystem: "bot.ouro.gatefold", category: "reader
             resource = cachedResource
             mediaType = cachedMediaType
         } else {
-            let asked = ContinuousClock.now
-            defer { serverLog.notice("server: handler for \(requestURL.lastPathComponent, privacy: .public) took \(Int((ContinuousClock.now - asked) / .milliseconds(1)), privacy: .public) ms") }
+            let asked = Date()
+            defer { serverLog.notice("server: handler for \(requestURL.lastPathComponent, privacy: .public) took \(Int(Date().timeIntervalSince(asked) * 1000), privacy: .public) ms") }
             guard let (newResource, newMediaType) = await handler(relativeURL) else {
                 await fail(urlSchemeTask, with: URLError(.fileDoesNotExist))
                 return
@@ -267,9 +267,9 @@ private let serverLog = Logger(subsystem: "bot.ouro.gatefold", category: "reader
         }
 
         // Full read fallback.
-        let reading = ContinuousClock.now
+        let reading = Date()
         let result = await resource.read()
-        serverLog.notice("server: read \(requestURL.lastPathComponent, privacy: .public) in \(Int((ContinuousClock.now - reading) / .milliseconds(1)), privacy: .public) ms, then responds")
+        serverLog.notice("server: read \(requestURL.lastPathComponent, privacy: .public) in \(Int(Date().timeIntervalSince(reading) * 1000), privacy: .public) ms, then responds")
         switch result {
         case let .success(data):
             await respond(urlSchemeTask, with: data, range: nil, totalLength: UInt64(data.count), mediaType: mediaType, url: requestURL, allowCrossOrigin: allowCrossOrigin)
