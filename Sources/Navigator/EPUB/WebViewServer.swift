@@ -8,6 +8,10 @@ import Foundation
 import ReadiumInternal
 import ReadiumShared
 import WebKit
+import os
+
+/// Probe (gatefold jump timing): when each request reaches the server, and each step of serving it.
+private let serverLog = Logger(subsystem: "bot.ouro.gatefold", category: "reader")
 
 /// A generic `WKURLSchemeHandler` that serves files, directories, and
 /// arbitrary resources at named routes using a custom URL scheme (e.g.
@@ -124,6 +128,7 @@ import WebKit
     // MARK: - WKURLSchemeHandler
 
     func webView(_ webView: WKWebView, start urlSchemeTask: any WKURLSchemeTask) {
+        serverLog.notice("server: asked for \(urlSchemeTask.request.url?.lastPathComponent ?? "?", privacy: .public)")
         let taskID = ObjectIdentifier(urlSchemeTask)
         activeTasks[taskID] = Task {
             await serve(urlSchemeTask)
@@ -198,6 +203,8 @@ import WebKit
             resource = cachedResource
             mediaType = cachedMediaType
         } else {
+            let asked = ContinuousClock.now
+            defer { serverLog.notice("server: handler for \(requestURL.lastPathComponent, privacy: .public) took \(Int((ContinuousClock.now - asked) / .milliseconds(1)), privacy: .public) ms") }
             guard let (newResource, newMediaType) = await handler(relativeURL) else {
                 await fail(urlSchemeTask, with: URLError(.fileDoesNotExist))
                 return
@@ -260,7 +267,9 @@ import WebKit
         }
 
         // Full read fallback.
+        let reading = ContinuousClock.now
         let result = await resource.read()
+        serverLog.notice("server: read \(requestURL.lastPathComponent, privacy: .public) in \(Int((ContinuousClock.now - reading) / .milliseconds(1)), privacy: .public) ms, then responds")
         switch result {
         case let .success(data):
             await respond(urlSchemeTask, with: data, range: nil, totalLength: UInt64(data.count), mediaType: mediaType, url: requestURL, allowCrossOrigin: allowCrossOrigin)
