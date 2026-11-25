@@ -71,17 +71,7 @@ class EPUBSpreadView: UIView, Loggable, PageView {
         self.spread = spread
         self.animatedLoad = animatedLoad
 
-        let config = WKWebViewConfiguration()
-        config.setURLSchemeHandler(viewModel.server, forURLScheme: viewModel.server.scheme)
-        config.mediaTypesRequiringUserActionForPlayback = .all
-
-        // Disable the Apple Intelligence Writing tools in the web views.
-        // See https://github.com/readium/swift-toolkit/issues/509#issuecomment-2577780749
-        if #available(iOS 18.0, *) {
-            config.writingToolsBehavior = .none
-        }
-
-        webView = WebView(editingActions: viewModel.editingActions, configuration: config)
+        webView = viewModel.makeWebView()
 
         super.init(frame: .zero)
 

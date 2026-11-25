@@ -379,6 +379,15 @@ open class EPUBNavigatorViewController: InputObservableViewController,
         NotificationCenter.default.removeObserver(self)
     }
 
+    override open func didMove(toParent parent: UIViewController?) {
+        super.didMove(toParent: parent)
+        // Removed from its parent, the navigator is done with its publication:
+        // its spare web view, which serves that publication, goes now.
+        if parent == nil {
+            viewModel.closeSpareWebView()
+        }
+    }
+
     override open func viewDidLoad() {
         super.viewDidLoad()
 

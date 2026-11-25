@@ -7,6 +7,7 @@
 import Foundation
 import ReadiumShared
 import UIKit
+import WebKit
 
 protocol EPUBNavigatorViewModelDelegate: AnyObject {
     func epubNavigatorViewModel(_ viewModel: EPUBNavigatorViewModel, runScript script: String, in scope: EPUBScriptScope)
@@ -148,6 +149,44 @@ enum EPUBScriptScope {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+    }
+
+    /// A web view for a new spread view: the warmed spare when one is ready,
+    /// otherwise a new one (see `SpareWebView`).
+    func makeWebView() -> WebView {
+        spareWebView.take() ?? EPUBNavigatorViewModel.newWebView(server: server, editingActions: editingActions)
+    }
+
+    /// Lets go of the spare web view and makes no more, when the navigator is
+    /// done with its publication.
+    func closeSpareWebView() {
+        spareWebView.close()
+    }
+
+    private lazy var spareWebView: SpareWebView<WebView> = { [server = self.server, editingActions = self.editingActions] in
+        SpareWebView(
+            make: { EPUBNavigatorViewModel.newWebView(server: server, editingActions: editingActions) },
+            warm: { webView, done in
+                let warmUp = SpareWarmUp(done)
+                webView.navigationDelegate = warmUp
+                webView.loadHTMLString("", baseURL: nil)
+                return warmUp
+            }
+        )
+    }()
+
+    private static func newWebView(server: WebViewServer, editingActions: EditingActionsController) -> WebView {
+        let config = WKWebViewConfiguration()
+        config.setURLSchemeHandler(server, forURLScheme: server.scheme)
+        config.mediaTypesRequiringUserActionForPlayback = .all
+
+        // Disable the Apple Intelligence Writing tools in the web views.
+        // See https://github.com/readium/swift-toolkit/issues/509#issuecomment-2577780749
+        if #available(iOS 18.0, *) {
+            config.writingToolsBehavior = .none
+        }
+
+        return WebView(editingActions: editingActions, configuration: config)
     }
 
     func url(to link: Link) -> AnyURL {
